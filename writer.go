@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
+	"encoding/hex"
 
 	"github.com/grailbio/go-dicom/dicomio"
 	"github.com/grailbio/go-dicom/dicomlog"
@@ -109,6 +111,17 @@ func writeBasicOffsetTable(e *dicomio.Encoder, offsets []uint32) {
 	writeRawItem(e, subEncoder.Bytes())
 }
 
+func parseTag(tag string) ([]byte,error) {
+	parts := strings.Split(strings.Trim(tag, "[()]"), ",")
+
+	bytes,err:=hex.DecodeString(parts[0]+parts[1])
+	if err !=nil {
+		return []byte{},err
+	}
+	return bytes,nil
+}
+
+
 // WriteElement encodes one data element.  Errors are reported through e.Error()
 // and/or E.Finish().
 //
@@ -127,9 +140,11 @@ func WriteElement(e *dicomio.Encoder, elem *Element) {
 		if err == nil && entry.VR != vr {
 			if dicomtag.GetVRKind(elem.Tag, entry.VR) != dicomtag.GetVRKind(elem.Tag, vr) {
 				// The golang repl. is different. We can't continue.
-				e.SetErrorf("dicom.WriteElement: VR value mismatch for tag %s. Element.VR=%v, but DICOM standard defines VR to be %v",
-					dicomtag.DebugString(elem.Tag), vr, entry.VR)
-				return
+				if entry.Name !="PixelPaddingValue" && entry.Name !="LUTData" {
+					e.SetErrorf("dicom.WriteElement: VR value mismatch for tag %s. Element.VR=%v, but DICOM standard defines VR to be %v",
+						dicomtag.DebugString(elem.Tag), vr, entry.VR)
+					return
+				}
 			}
 			dicomlog.Vprintf(1, "dicom.WriteElement: VR value mismatch for tag %s. Element.VR=%v, but DICOM standard defines VR to be %v (continuing)",
 				dicomtag.DebugString(elem.Tag), vr, entry.VR)
@@ -338,7 +353,23 @@ func WriteElement(e *dicomio.Encoder, elem *Element) {
 			if len(s)%2 == 1 {
 				sube.WriteByte(0)
 			}
-		case "AT", "NA":
+		case "AT":
+			value := fmt.Sprint(elem.Value)
+			bytes, _ := parseTag(value)
+			transferSyntax,_:=e.TransferSyntax()
+			switch transferSyntax {
+				case binary.LittleEndian:
+					sube.WriteByte(bytes[1])
+					sube.WriteByte(bytes[0])
+					sube.WriteByte(bytes[3])
+					sube.WriteByte(bytes[2])
+				case binary.BigEndian:
+					for _,byte:=range bytes{
+						sube.WriteByte(byte)
+					}
+
+			}
+		case "NA":
 			fallthrough
 		default:
 			s := ""
@@ -367,6 +398,10 @@ func WriteElement(e *dicomio.Encoder, elem *Element) {
 		e.WriteBytes(bytes)
 	}
 }
+
+
+
+
 
 // WriteDataSet writes the dataset into the stream in DICOM file format,
 // complete with the magic header and metadata elements.

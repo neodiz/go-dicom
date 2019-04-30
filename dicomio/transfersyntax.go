@@ -10,8 +10,8 @@ import (
 // StandardTransferSyntaxes is the list of standard transfer syntaxes.
 var StandardTransferSyntaxes = []string{
 	dicomuid.ImplicitVRLittleEndian,
-	dicomuid.ExplicitVRLittleEndian,
-	dicomuid.ExplicitVRBigEndian,
+//	dicomuid.ExplicitVRLittleEndian,
+//	dicomuid.ExplicitVRBigEndian,
 	dicomuid.DeflatedExplicitVRLittleEndian,
 }
 
